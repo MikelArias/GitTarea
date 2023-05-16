@@ -1,0 +1,7 @@
+[
+    {
+        "ExportingStackId": "arn:aws:cloudformation:us-east-1:993789114729:stack/Wordpress/b96cc640-ee63-11ed-aa25-0e876f97c47b",
+        "Name": "ServerPublicIp",
+        "Value": "http::\\\\ec2-54-89-188-83.compute-1.amazonaws.com:80"
+    }
+]

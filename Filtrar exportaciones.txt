@@ -1,0 +1,9 @@
+Para que salga la primera exportacion
+aws cloudformation list-exports --query "Exports[0]" para la siguiente ponemos "Exports[1]"
+
+Filtrado ? (filtra) por (Name) nombre y ponemos el nombre
+aws cloudformation list-exports --query "Exports[?Name=='ServerPublicIp']"
+
+Lo mismo de antes y te muestra el value
+aws cloudformation list-exports --query "Exports[?Name=='ServerPublicIp'].Value"
+
