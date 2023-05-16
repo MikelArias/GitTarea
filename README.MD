@@ -41,3 +41,7 @@ rm phpMyAdmin-latest-all-languages.tar.gz
 
 sudo systemctl start mariadb
 
+echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
+
+
+
