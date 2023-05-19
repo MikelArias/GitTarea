@@ -41,10 +41,6 @@ Resources:
 
   WordPressServer:
     Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-       Timeout: PT7M
-       Count: 1
     Properties:
       ImageId: !Ref EC2
       IamInstanceProfile: LabInstanceProfile
@@ -57,24 +53,21 @@ Resources:
           Value: !Join [ "-", [ !Ref AWS::StackName, !Ref AWS::AccountId ] ]
       UserData:
           Fn::Base64: !Sub |
-            #!/bin/bash -xe
-           
-            # Instalar httpd
-            sudo dnf update && sudo dnf upgrade -y
-            sudo dnf install httpd -y && sudo service httpd start
-            sudo systemctl enable httpd
-           
-            # Instalar MySQLServer
-            sudo dnf install mariadb105-server -y && sudo service mariadb start
-            sudo service mariadb start
-            sudo systemctl enable mariadb
-
-            # Instalar PHP
-            sudo dnf install php php-devel -y
-           
-            # Crear archivo phpinfo
-            echo "<?php phpinfo();?>" | sudo tee /var/www/html/phpinfo.php &>/dev/null
-            sudo reboot
+            #!/bin/bash
+          yum update -y
+          yum install -y httpd24 mariadb-server php73 php73-mysqlnd
+          systemctl start httpd
+          systemctl enable httpd
+          systemctl start mariadb
+          systemctl enable mariadb
+          echo "<?php phpinfo(); ?>" > /var/www/html/index.php
+          chown apache:apache /var/www/html/index.php
+          service httpd restart
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}
+      CreationPolicy:
+        ResourceSignal:
+            Timeout: PT7M
+            Count: 1
 Outputs:
   InstanceId:
     Description: "Instancia con ID"
