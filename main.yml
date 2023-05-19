@@ -41,6 +41,10 @@ Resources:
 
   WordPressServer:
     Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+       Timeout: PT7M
+       Count: 1
     Properties:
       ImageId: !Ref EC2
       IamInstanceProfile: LabInstanceProfile
@@ -51,6 +55,26 @@ Resources:
       Tags:
         - Key: Name
           Value: !Join [ "-", [ !Ref AWS::StackName, !Ref AWS::AccountId ] ]
+      UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+           
+            # Instalar httpd
+            sudo dnf update && sudo dnf upgrade -y
+            sudo dnf install httpd -y && sudo service httpd start
+            sudo systemctl enable httpd
+           
+            # Instalar MySQLServer
+            sudo dnf install mariadb105-server -y && sudo service mariadb start
+            sudo service mariadb start
+            sudo systemctl enable mariadb
+
+            # Instalar PHP
+            sudo dnf install php php-devel -y
+           
+            # Crear archivo phpinfo
+            echo "<?php phpinfo();?>" | sudo tee /var/www/html/phpinfo.php &>/dev/null
+            sudo reboot
 Outputs:
   InstanceId:
     Description: "Instancia con ID"
@@ -61,6 +85,6 @@ Outputs:
     Description: "Tarea De salida a plantilla"
     Value: !Sub 
         - 'http::\\.${Domain}:80'
-        - Domain: !GetAtt WordPressServer3.PublicDnsName
+        - Domain: !GetAtt WordPressServer.PublicDnsName
     Export:
       Name: ServerPublicIp
