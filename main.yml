@@ -1,9 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Grupo de Seguridad
+Description: Grupo de Seguridad y plantilla
 Parameters:
-  EC2Instance:
+  DBName:
+    Default: TareaFinalBD
+    Description: Nombre de la Database
     Type: String
-    Description: Solo pueden ser estas siguientes instancias
+    MinLength: '8'
+  DBUser:
+    Default: TareaFinalBD
+    Description: Nombre de la Database
+    Type: String
+    MinLength: '8'
+  DBPassword:  
+    Default: TareaFinalBD
+    Description: Nombre de la Database
+    Type: String
+    MinLength: '8'     
+  EC2:
+    Type: String
     Default: t2.small
     AllowedValues:
       - t2.nano
@@ -11,73 +25,118 @@ Parameters:
       - t2.small
       - t2.medium
       - t2.large
-  EC2: 
-    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id"
+  EC2AMI: 
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: "/aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 
 Resources:
-  SecurityGroup: 
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties: 
+      DBName: !Ref DBName
+      DBInstanceClass: db.t3.medium
+      Engine: mariadb
+      EngineVersion: "10.6.10"
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: '200'
+      VPCSecurityGroups: 
+      - !GetAtt  DBSecurityGroup.GroupId
+
+  DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties: 
-      GroupDescription: !Sub "Grupo de seguridad interno para la pila ${AWS::StackName}"
-      GroupName: Group
-      SecurityGroupIngress: 
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
+      GroupDescription: Grupo de Seguridad de la Database
+      SecurityGroupIngress:   
+      - IpProtocol: TCP
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupName:
+          !Ref SecurityGroup
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Grupo de Seguridad interno para la pila ${AWS::StackName}"
+      GroupName: SecurityGroup
+      SecurityGroupIngress:
+      - IpProtocol: TCP
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: TCP
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: TCP
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: TCP
+        FromPort: 3306
+        ToPort: 3306
       Tags:
         - Key: Name
           Value: !Join [ "-", [ !Ref AWS::StackName, !Ref AWS::AccountId ] ]
-          
-
+        
   WordPressServer:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref EC2
+      ImageId: ami-0889a44b331db0194
+      InstanceType: !Ref EC2
+      KeyName: vockey
       IamInstanceProfile: LabInstanceProfile
       SecurityGroupIds: 
-        - Ref: SecurityGroup
-      InstanceType: !Ref EC2Instance
-      KeyName: vockey
+        - !Ref SecurityGroup
       Tags:
         - Key: Name
-          Value: !Join [ "-", [ !Ref AWS::StackName, !Ref AWS::AccountId ] ]
-      UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-          yum update -y
-          yum install -y httpd24 mariadb-server php73 php73-mysqlnd
-          systemctl start httpd
-          systemctl enable httpd
-          systemctl start mariadb
-          systemctl enable mariadb
-          echo "<?php phpinfo(); ?>" > /var/www/html/index.php
-          chown apache:apache /var/www/html/index.php
-          service httpd restart
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}
-      CreationPolicy:
-        ResourceSignal:
-            Timeout: PT7M
-            Count: 1
+          Value: 
+            !Join 
+              - "-"
+              - - !Ref "AWS::StackName"
+                - !Ref "AWS::AccountId"      
+      UserData:   
+        Fn::Base64: !Sub | 
+          #!/bin/bash
+          exec > /tmp/install.log 2>&1 
+          sudo dnf update -y 
+          sudo dnf install -y httpd wget php-fpm php-mysqli php-json php8.1 php-devel
+          sudo dnf install -y mariadb105
+          sudo systemctl start httpd 
+          sudo dnf install wget php-mysqlnd httpd php-fpm php-mysqli mariadb105-server php-json php php-devel -y
+          wget https://wordpress.org/latest.tar.gz
+          tar -xzf latest.tar.gz
+          sudo systemctl start mariadb httpd
+          sudo mv /wordpress/* /var/www/html
+          sudo mysqladmin -u root password 
+          sudo mysql -u Mikel-final -plmaasir23 -P ${Database.Endpoint.Port} -h ${Database.Endpoint.Address} -e "CREATE DATABASE `wordpress-pablo`;
+          CREATE USER 'admin'@'localhost' IDENTIFIED BY 'root';
+          GRANT ALL PRIVILEGES ON `wordpress-db`.* TO "admin"@"localhost";
+          FLUSH PRIVILEGES;
+          cp wordpress/wp-config-sample.php wordpress/wp-config.php
+          sed 's/NONE/ALLOW/3' wp-config.php
+          sed 's/username_here/Mikel-final' wp-config.php  
+          sed 's/password_here/lmaasir23' wp-config.php
+          # Make sure that NOBODY can access the server without a password 
+          mysql -e "UPDATE mysql.user SET Password = PASSWORD('CHANGEME') WHERE User = 'root'" 
+          # Kill the anonymous users 
+          mysql -e "DROP USER ''@'localhost'" 
+          # Because our hostname varies we'll use some Bash magic here. 
+          mysql -e "DROP USER ''@'$(hostname)'" 
+          # Kill off the demo database
+          mysql -e "DROP DATABASE test" 
+          # Make our changes take effect 
+          mysql -e "FLUSH PRIVILEGES""
+          exit
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} --resource WordPressServer
 Outputs:
-  InstanceId:
-    Description: "Instancia con ID"
-    Value: AWS::StackId
-    Export: 
-      Name: Outputs
-  ServerPublicIp:
-    Description: "Tarea De salida a plantilla"
-    Value: !Sub 
-        - 'http::\\.${Domain}:80'
-        - Domain: !GetAtt WordPressServer.PublicDnsName
+  InstancesID:
+    Description: "instanciaID"
+    Value: !Ref WordPressServer
     Export:
-      Name: ServerPublicIp
+      Name: InstanceId
+  ServerPublicIP:
+    Description: "ServerPublicIP"
+    Value: !Sub http://${WordPressServer.PublicDnsName}:80
+    Export:
+      Name: ServerIP
