@@ -109,7 +109,7 @@ Resources:
           sudo systemctl start mariadb httpd
           sudo mv /wordpress/* /var/www/html
           sudo mysqladmin -u root password 
-          sudo mysql -u Mikel-final -plmaasir23 -P ${Database.Endpoint.Port} -h ${Database.Endpoint.Address} -e "CREATE DATABASE `wordpress-pablo`;
+          sudo mysql -u Mikel-final -plmaasir23 -P ${Database.Endpoint.Port} -h ${Database.Endpoint.Address} -e "CREATE DATABASE `wordpress-db`;
           CREATE USER 'admin'@'localhost' IDENTIFIED BY 'root';
           GRANT ALL PRIVILEGES ON `wordpress-db`.* TO "admin"@"localhost";
           FLUSH PRIVILEGES;
